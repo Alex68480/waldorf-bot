@@ -9,8 +9,13 @@ from telegram import InputMediaPhoto
 
 STYLE_FIXE = "waldorf kindergarten, close up of natural wooden toys, autumn leaves, wool felt, beeswax candles, nature table, soft warm light, cozy atmosphere, no people, no humans, photorealistic, high quality, instagram square format, warm earth tones"
 
-FONT_PATH = os.path.join(os.path.expanduser("~"), "Desktop", "Lato-Bold.ttf")
+FONT_PATH = "Lato-Bold.ttf"
 
+if not os.path.exists(FONT_PATH):
+    font_url = "https://github.com/google/fonts/raw/main/ofl/lato/Lato-Bold.ttf"
+    r = requests.get(font_url)
+    with open(FONT_PATH, "wb") as f:
+        f.write(r.content)
 def generate_image_with_text(prompt, texte_slide, index=0):
     full_prompt = STYLE_FIXE + " " + prompt + " seed" + str(index * 42)
     url = "https://image.pollinations.ai/prompt/" + full_prompt.replace(" ", "%20")
