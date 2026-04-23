@@ -166,8 +166,8 @@ def generer_slides_pour_sujet(sujet):
         ]
     elif "natur" in sujet_lower:
         return [
-            "Die Natur ist unser groesster Lehrmeister",
-            "Draussen spielen staerkt den Koerper",
+            "Die Natur ist unser grösster Lehrmeister",
+            "Draussen spielen staerkt den Körper",
             "Jahreszeiten erleben und feiern",
             "Naturmaterialien im Alltag",
             "Kinder und Natur gehoeren zusammen"
@@ -180,7 +180,18 @@ def generer_slides_pour_sujet(sujet):
             "Was lernen die Kinder dabei?",
             "Unser Alltag mit " + sujet
         ]
-
+def generate_image_sans_text(prompt, index=0):
+    variante = VARIANTES[index % len(VARIANTES)]
+    full_prompt = variante + " " + prompt + " seed" + str(index * 137)
+    url = "https://image.pollinations.ai/prompt/" + full_prompt.replace(" ", "%20")
+    response = requests.get(url, timeout=90)
+    img = Image.open(BytesIO(response.content)).convert("RGB")
+    img = img.resize((1080, 1080))
+    output = BytesIO()
+    img.save(output, format="JPEG")
+    output.seek(0)
+    return output
+    
 def handle_message(update, context):
     texte = update.message.text
     avec_texte = "ohne text" not in texte.lower()
@@ -210,7 +221,10 @@ def handle_message(update, context):
     else:
         update.message.reply_text("Erstellung deines Instagram-Bildes... ✨")
         try:
-            img = generate_image_with_text(texte, texte, 0)
+           if avec_texte:
+                img = generate_image_with_text(texte, slide_texte, i)
+            else:
+                img = generate_image_sans_text(texte, i)
             update.message.reply_photo(
                 photo=img,
                 caption="#waldorfkindergarten #waldorf #natur #kindergarten #waldorfpadagogik"
