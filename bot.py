@@ -183,6 +183,7 @@ def generer_slides_pour_sujet(sujet):
 
 def handle_message(update, context):
     texte = update.message.text
+    avec_texte = "ohne text" not in texte.lower()
     if "carousel" in texte.lower() or "karussell" in texte.lower():
         slides = generer_slides_pour_sujet(texte)
         total = len(slides)
