@@ -219,7 +219,8 @@ def handle_message(update, context):
 
 
 
-token = "8683059546:AAGP4cf2xad-c8Mivnk1oh6-iHUjL9TG9-c"
+import os
+token = os.environ.get("TOKEN")
 
 updater = Updater(token)
 updater.dispatcher.add_handler(MessageHandler(Filters.text, handle_message))
