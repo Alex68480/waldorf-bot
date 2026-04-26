@@ -18,7 +18,13 @@ if not os.path.exists(FONT_PATH):
 
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-STYLE_DALLE = "waldorf kindergarten, natural wooden toys, autumn leaves, wool felt, beeswax candles, nature table, soft warm light, cozy atmosphere, no people, no humans, photorealistic, high quality, square format, warm earth tones"
+STYLES_DALLE = [
+    "waldorf steiner kindergarten, watercolor painting on paper, beeswax crayons, art table, soft natural light, no people, photorealistic, high quality, square format",
+    "waldorf steiner kindergarten, seasonal nature table, pine cones, flowers, stones, shells, moss, warm light, no people, photorealistic, high quality, square format",
+    "waldorf steiner kindergarten, knitting wool, needle felting, handcraft, colorful yarn, natural materials, no people, photorealistic, high quality, square format",
+    "waldorf steiner kindergarten, garden, vegetables, small tools, mud kitchen, outdoor, natural light, no people, photorealistic, high quality, square format",
+    "waldorf steiner kindergarten, morning circle, candle, silk scarves, colorful, warm atmosphere, no people, photorealistic, high quality, square format"
+]
 
 def generer_textes_gpt(sujet, nombre=5):
     prompt = """Du bist ein Experte fuer Waldorf Paedagogik. 
@@ -48,10 +54,12 @@ def generer_hashtags_gpt(sujet):
     )
     return response.choices[0].message.content.strip()
 
-def generate_dalle_image(prompt):
+def generate_dalle_image(prompt, index=0):
+    style = STYLES_DALLE[index % len(STYLES_DALLE)]
+    full_prompt = style + " " + prompt + ", cozy warm atmosphere, no people, no humans, no children"
     response = openai_client.images.generate(
         model="dall-e-3",
-        prompt=STYLE_DALLE + " " + prompt,
+        prompt=full_prompt,
         size="1024x1024",
         quality="standard",
         n=1
@@ -63,7 +71,7 @@ def generate_dalle_image(prompt):
     return img
 
 def generate_image_with_text(prompt, texte_slide, index=0):
-    img = generate_dalle_image(prompt)
+    img = generate_dalle_image(prompt, index)
     draw = ImageDraw.Draw(img)
     bande_hauteur = 220
     bande_y = 1080 - bande_hauteur
@@ -95,7 +103,7 @@ def generate_image_with_text(prompt, texte_slide, index=0):
     return output
 
 def generate_image_sans_text(prompt, index=0):
-    img = generate_dalle_image(prompt)
+    img = generate_dalle_image(prompt, index)
     output = BytesIO()
     img.save(output, format="JPEG")
     output.seek(0)
