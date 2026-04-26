@@ -16,20 +16,13 @@ if not os.path.exists(FONT_PATH):
     with open(FONT_PATH, "wb") as f:
         f.write(r.content)
 
-VARIANTES = [
-    "close up wooden toys warm light waldorf kindergarten",
-    "autumn leaves nature table candles waldorf kindergarten",
-    "wool felt basket natural materials waldorf kindergarten",
-    "morning light window plants indoor waldorf kindergarten",
-    "beeswax crayons paper art craft waldorf kindergarten"
-]
-
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+STYLE_DALLE = "waldorf kindergarten, natural wooden toys, autumn leaves, wool felt, beeswax candles, nature table, soft warm light, cozy atmosphere, no people, no humans, photorealistic, high quality, square format, warm earth tones"
 
 def generer_textes_gpt(sujet, nombre=5):
     prompt = """Du bist ein Experte fuer Waldorf Paedagogik. 
     Erstelle """ + str(nombre) + """ kurze Texte fuer einen Instagram Karussell Post auf Deutsch ueber das Thema: """ + sujet + """
-    
     Regeln:
     - Jeder Text max 8 Woerter
     - Paedagogisch wertvoll und inspirierend
@@ -55,13 +48,22 @@ def generer_hashtags_gpt(sujet):
     )
     return response.choices[0].message.content.strip()
 
-def generate_image_with_text(prompt, texte_slide, index=0):
-    variante = VARIANTES[index % len(VARIANTES)]
-    full_prompt = variante + " " + prompt + " seed" + str(index * 137)
-    url = "https://image.pollinations.ai/prompt/" + full_prompt.replace(" ", "%20")
-    response = requests.get(url, timeout=90)
-    img = Image.open(BytesIO(response.content)).convert("RGB")
+def generate_dalle_image(prompt):
+    response = openai_client.images.generate(
+        model="dall-e-3",
+        prompt=STYLE_DALLE + " " + prompt,
+        size="1024x1024",
+        quality="standard",
+        n=1
+    )
+    image_url = response.data[0].url
+    img_response = requests.get(image_url, timeout=60)
+    img = Image.open(BytesIO(img_response.content)).convert("RGB")
     img = img.resize((1080, 1080))
+    return img
+
+def generate_image_with_text(prompt, texte_slide, index=0):
+    img = generate_dalle_image(prompt)
     draw = ImageDraw.Draw(img)
     bande_hauteur = 220
     bande_y = 1080 - bande_hauteur
@@ -93,12 +95,7 @@ def generate_image_with_text(prompt, texte_slide, index=0):
     return output
 
 def generate_image_sans_text(prompt, index=0):
-    variante = VARIANTES[index % len(VARIANTES)]
-    full_prompt = variante + " " + prompt + " seed" + str(index * 137)
-    url = "https://image.pollinations.ai/prompt/" + full_prompt.replace(" ", "%20")
-    response = requests.get(url, timeout=90)
-    img = Image.open(BytesIO(response.content)).convert("RGB")
-    img = img.resize((1080, 1080))
+    img = generate_dalle_image(prompt)
     output = BytesIO()
     img.save(output, format="JPEG")
     output.seek(0)
@@ -112,7 +109,7 @@ def handle_message(update, context):
         slides = generer_textes_gpt(texte)
         hashtags = generer_hashtags_gpt(texte)
         total = len(slides)
-        update.message.reply_text("Erstellung von " + str(total) + " Bildern gestartet!")
+        update.message.reply_text("Erstellung von " + str(total) + " Bildern mit DALL-E 3 gestartet!")
         medias = []
         for i, slide_texte in enumerate(slides):
             try:
@@ -122,16 +119,17 @@ def handle_message(update, context):
                 else:
                     img = generate_image_sans_text(texte, i)
                 medias.append(InputMediaPhoto(media=img))
-                time.sleep(5)
+                time.sleep(2)
             except Exception as e:
                 print("Fehler bei Bild " + str(i) + ": " + str(e))
+                update.message.reply_text("Fehler bei Bild " + str(i+1) + ": " + str(e))
         if medias:
             update.message.reply_media_group(media=medias)
             update.message.reply_text("Dein Karussell ist fertig! 🎉\n\n" + hashtags)
         else:
-            update.message.reply_text("Leider konnten keine Bilder erstellt werden. Bitte versuche es nochmal.")
+            update.message.reply_text("Leider konnten keine Bilder erstellt werden.")
     else:
-        update.message.reply_text("Erstellung deines Instagram-Bildes... ✨")
+        update.message.reply_text("Erstellung deines Instagram-Bildes mit DALL-E 3... ✨")
         try:
             if avec_texte:
                 img = generate_image_with_text(texte, texte, 0)
