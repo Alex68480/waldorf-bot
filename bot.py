@@ -18,20 +18,44 @@ if not os.path.exists(FONT_PATH):
 
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-STYLES_DALLE = [
-    "waldorf steiner kindergarten, watercolor painting on paper, beeswax crayons, art table, soft natural light, no people, photorealistic, high quality, square format",
-    "waldorf steiner kindergarten, seasonal nature table, pine cones, flowers, stones, shells, moss, warm light, no people, photorealistic, high quality, square format",
-    "waldorf steiner kindergarten, knitting wool, needle felting, handcraft, colorful yarn, natural materials, no people, photorealistic, high quality, square format",
-    "waldorf steiner kindergarten, garden, vegetables, small tools, mud kitchen, outdoor, natural light, no people, photorealistic, high quality, square format",
-    "waldorf steiner kindergarten, morning circle, candle, silk scarves, colorful, warm atmosphere, no people, photorealistic, high quality, square format"
-]
+def generer_prompt_dalle(sujet, index):
+    styles = [
+        "morning circle time",
+        "bread baking in kitchen",
+        "watercolor painting activity",
+        "wool and felt craft table",
+        "seasonal nature table with plants"
+    ]
+    style = styles[index % len(styles)]
+    prompt_gpt = """Tu es un expert en photographie et en pedagogie Waldorf Steiner.
+    Cree un prompt en anglais pour DALL-E 3 qui genere une belle photo Instagram sur le theme: """ + sujet + """
+    Le style visuel doit etre: """ + style + """
+    
+    Regles strictes:
+    - Photo realiste et chaleureuse, pas de style cartoon
+    - Couleurs douces: beige, terre, pastel, blanc casse
+    - Elements naturels: laine, tissu, plantes, argile, cire, aquarelle
+    - Lumiere naturelle douce venant d'une fenetre
+    - Composition simple et epuree, pas surchargee
+    - Ambiance calme et bienveillante
+    - PAS d'enfants ni de personnes
+    - Format carre Instagram
+    - Retourne UNIQUEMENT le prompt en anglais, rien d'autre
+    """
+    response = openai_client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt_gpt}],
+        max_tokens=150
+    )
+    return response.choices[0].message.content.strip()
 
 def generer_textes_gpt(sujet, nombre=5):
-    prompt = """Du bist ein Experte fuer Waldorf Paedagogik. 
-    Erstelle """ + str(nombre) + """ kurze Texte fuer einen Instagram Karussell Post auf Deutsch ueber das Thema: """ + sujet + """
+    prompt = """Du bist ein Experte fuer Waldorf Steiner Paedagogik. 
+    Erstelle """ + str(nombre) + """ kurze inspirierende Texte auf Deutsch fuer einen Instagram Karussell Post ueber: """ + sujet + """
+    
     Regeln:
-    - Jeder Text max 8 Woerter
-    - Paedagogisch wertvoll und inspirierend
+    - Jeder Text maximal 8 Woerter
+    - Warm, poetisch und paedagogisch wertvoll
     - Passend fuer einen Waldorf Kindergarten Instagram Account
     - Nur die Texte zurueckgeben, einen pro Zeile, ohne Nummerierung
     """
@@ -54,12 +78,12 @@ def generer_hashtags_gpt(sujet):
     )
     return response.choices[0].message.content.strip()
 
-def generate_dalle_image(prompt, index=0):
-    style = STYLES_DALLE[index % len(STYLES_DALLE)]
-    full_prompt = style + " " + prompt + ", cozy warm atmosphere, no people, no humans, no children"
+def generate_dalle_image(sujet, index=0):
+    prompt = generer_prompt_dalle(sujet, index)
+    print("DALL-E prompt: " + prompt)
     response = openai_client.images.generate(
         model="dall-e-3",
-        prompt=full_prompt,
+        prompt=prompt,
         size="1024x1024",
         quality="standard",
         n=1
@@ -70,12 +94,12 @@ def generate_dalle_image(prompt, index=0):
     img = img.resize((1080, 1080))
     return img
 
-def generate_image_with_text(prompt, texte_slide, index=0):
-    img = generate_dalle_image(prompt, index)
+def generate_image_with_text(sujet, texte_slide, index=0):
+    img = generate_dalle_image(sujet, index)
     draw = ImageDraw.Draw(img)
     bande_hauteur = 220
     bande_y = 1080 - bande_hauteur
-    draw.rectangle([0, bande_y, 1080, 1080], fill=(30, 30, 30))
+    draw.rectangle([0, bande_y, 1080, 1080], fill=(45, 35, 25))
     try:
         font = ImageFont.truetype(FONT_PATH, 38)
         font_small = ImageFont.truetype(FONT_PATH, 28)
@@ -95,15 +119,15 @@ def generate_image_with_text(prompt, texte_slide, index=0):
     y_texte = bande_y + 25
     for i, ligne in enumerate(lignes[:4]):
         f = font if i == 0 else font_small
-        draw.text((40, y_texte), ligne, font=f, fill="white")
+        draw.text((40, y_texte), ligne, font=f, fill=(245, 235, 220))
         y_texte += 50
     output = BytesIO()
     img.save(output, format="JPEG")
     output.seek(0)
     return output
 
-def generate_image_sans_text(prompt, index=0):
-    img = generate_dalle_image(prompt, index)
+def generate_image_sans_text(sujet, index=0):
+    img = generate_dalle_image(sujet, index)
     output = BytesIO()
     img.save(output, format="JPEG")
     output.seek(0)
@@ -113,7 +137,7 @@ def handle_message(update, context):
     texte = update.message.text
     avec_texte = "ohne text" not in texte.lower()
     if "carousel" in texte.lower() or "karussell" in texte.lower():
-        update.message.reply_text("GPT erstellt die Texte... ✨")
+        update.message.reply_text("GPT erstellt die Texte und Bildprompts... ✨")
         slides = generer_textes_gpt(texte)
         hashtags = generer_hashtags_gpt(texte)
         total = len(slides)
