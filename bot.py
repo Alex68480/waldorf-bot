@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import requests
 import os
 import time
@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram import InputMediaPhoto
+from openai import OpenAI
 
 FONT_PATH = "Lato-Bold.ttf"
 
@@ -23,11 +24,41 @@ VARIANTES = [
     "beeswax crayons paper art craft waldorf kindergarten"
 ]
 
+openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+def generer_textes_gpt(sujet, nombre=5):
+    prompt = """Du bist ein Experte fuer Waldorf Paedagogik. 
+    Erstelle """ + str(nombre) + """ kurze Texte fuer einen Instagram Karussell Post auf Deutsch ueber das Thema: """ + sujet + """
+    
+    Regeln:
+    - Jeder Text max 8 Woerter
+    - Paedagogisch wertvoll und inspirierend
+    - Passend fuer einen Waldorf Kindergarten Instagram Account
+    - Nur die Texte zurueckgeben, einen pro Zeile, ohne Nummerierung
+    """
+    response = openai_client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200
+    )
+    textes = response.choices[0].message.content.strip().split("\n")
+    textes = [t.strip() for t in textes if t.strip()]
+    return textes[:nombre]
+
+def generer_hashtags_gpt(sujet):
+    prompt = """Erstelle 10 relevante Instagram Hashtags auf Deutsch fuer einen Waldorf Kindergarten Post ueber: """ + sujet + """
+    Nur die Hashtags zurueckgeben, alle in einer Zeile, mit # davor."""
+    response = openai_client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=100
+    )
+    return response.choices[0].message.content.strip()
+
 def generate_image_with_text(prompt, texte_slide, index=0):
     variante = VARIANTES[index % len(VARIANTES)]
     full_prompt = variante + " " + prompt + " seed" + str(index * 137)
     url = "https://image.pollinations.ai/prompt/" + full_prompt.replace(" ", "%20")
-    print("Lade Bild " + str(index+1))
     response = requests.get(url, timeout=90)
     img = Image.open(BytesIO(response.content)).convert("RGB")
     img = img.resize((1080, 1080))
@@ -73,48 +104,15 @@ def generate_image_sans_text(prompt, index=0):
     output.seek(0)
     return output
 
-def generer_slides_pour_sujet(sujet):
-    sujet_lower = sujet.lower()
-    if "rhythmus" in sujet_lower or "rhyth" in sujet_lower:
-        return [
-            "Rhythmus gibt Kindern Sicherheit",
-            "Feste Tagesablaeufe staerken das Vertrauen",
-            "Morgenkreis, Spiel, Mahlzeit, Ruhe",
-            "Rhythmus foerdert die Entwicklung",
-            "So leben wir Rhythmus im Alltag"
-        ]
-    elif "spiel" in sujet_lower:
-        return [
-            "Spielen ist die Arbeit des Kindes",
-            "Freies Spiel staerkt die Kreativitaet",
-            "Naturmaterialien regen die Fantasie an",
-            "Kinder lernen durch Spielen",
-            "Unser Spielraum im Kindergarten"
-        ]
-    elif "natur" in sujet_lower:
-        return [
-            "Die Natur ist unser groesster Lehrmeister",
-            "Draussen spielen staerkt den Koerper",
-            "Jahreszeiten erleben und feiern",
-            "Naturmaterialien im Alltag",
-            "Kinder und Natur gehoeren zusammen"
-        ]
-    else:
-        return [
-            sujet + " im Waldorf Kindergarten",
-            "Warum ist " + sujet + " wichtig?",
-            "So setzen wir " + sujet + " um",
-            "Was lernen die Kinder dabei?",
-            "Unser Alltag mit " + sujet
-        ]
-
 def handle_message(update, context):
     texte = update.message.text
     avec_texte = "ohne text" not in texte.lower()
     if "carousel" in texte.lower() or "karussell" in texte.lower():
-        slides = generer_slides_pour_sujet(texte)
+        update.message.reply_text("GPT erstellt die Texte... ✨")
+        slides = generer_textes_gpt(texte)
+        hashtags = generer_hashtags_gpt(texte)
         total = len(slides)
-        update.message.reply_text("Erstellung deines Karussells gestartet! ✨ (" + str(total) + " Bilder)")
+        update.message.reply_text("Erstellung von " + str(total) + " Bildern gestartet!")
         medias = []
         for i, slide_texte in enumerate(slides):
             try:
@@ -129,12 +127,7 @@ def handle_message(update, context):
                 print("Fehler bei Bild " + str(i) + ": " + str(e))
         if medias:
             update.message.reply_media_group(media=medias)
-            update.message.reply_text(
-                "Dein Karussell ist fertig! 🎉\n\n"
-                "#waldorfkindergarten #waldorfpadagogik #kindergarten "
-                "#waldorferziehung #naturkind #padagogik #waldorf "
-                "#fruhkindlichebildung #spielenundlernen #kindergartenalltag"
-            )
+            update.message.reply_text("Dein Karussell ist fertig! 🎉\n\n" + hashtags)
         else:
             update.message.reply_text("Leider konnten keine Bilder erstellt werden. Bitte versuche es nochmal.")
     else:
@@ -144,10 +137,8 @@ def handle_message(update, context):
                 img = generate_image_with_text(texte, texte, 0)
             else:
                 img = generate_image_sans_text(texte, 0)
-            update.message.reply_photo(
-                photo=img,
-                caption="#waldorfkindergarten #waldorf #natur #kindergarten #waldorfpadagogik"
-            )
+            hashtags = generer_hashtags_gpt(texte)
+            update.message.reply_photo(photo=img, caption=hashtags)
         except Exception as e:
             update.message.reply_text("Fehler: " + str(e))
 
